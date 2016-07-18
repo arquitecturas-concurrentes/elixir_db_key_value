@@ -9,7 +9,7 @@ defmodule DB.Server.Supervisor do
 	# Private API
 	def init({:ok, db_name}) do
 	    children = [
-	      worker(DB.Server, [{:global, db_name}], restart: :transient)
+	      worker(DB.Server, [db_name], restart: :transient)
 	    ]
     	supervise(children, strategy: :one_for_one, max_restarts: 10, max_seconds: 2)	    
 	end
