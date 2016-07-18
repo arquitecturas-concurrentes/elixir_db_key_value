@@ -16,6 +16,7 @@ defmodule DB.Server do
 	def handle_call({:get, key}, _from, {db_name, datas}) do
 		IO.puts "get #{key}"
 		onDataChange db_name, datas
+		IO.puts '#{inspect hash(key,db_name)}'
 		{:reply, "VALUE", {db_name, :pg2.get_members db_name}}
 	end
 
@@ -46,6 +47,13 @@ defmodule DB.Server do
 			IO.puts 'NO CAMBIARON LOS DATA #{inspect d}'
 		end
 
+	end
+
+	defp hash(key, db_name) do
+		datas = :pg2.get_members(db_name)
+		value = :crypto.hash(:sha256, key) |> Base.encode16 |> String.graphemes |> Enum.map(fn x -> String.to_integer x, 16 end) |> Enum.sum
+		index = rem(value, length(datas))
+		Enum.at datas, index 
 	end
 
 end
