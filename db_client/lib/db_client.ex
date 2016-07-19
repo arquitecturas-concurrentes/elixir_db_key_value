@@ -1,46 +1,70 @@
 defmodule DB.Client do
 	use GenServer
 
-	# Public API
+	  # Public API
   	def start_link(name, db_name, servers) do
     	GenServer.start_link(__MODULE__, {:ok, db_name, servers}, [name: name])
   	end
 
+    # Get a value by key
   	def get(pid, key) do
   		GenServer.call pid, {:get, key}
   	end
 
+    # Set a value by key
     def set(pid, key, value) do
       GenServer.call pid, {:set, key, value} 
     end
 
+    # Set a value by key (it doesn't await for confirmation)
     def unsafe_set(pid, key, value) do
       GenServer.cast pid, {:set, key, value}
     end
 
+    # Remove a key
     def remove(pid, key) do
       GenServer.call pid, {:remove, key}
     end
 
   	# Private API
   	def init({:ok, db_name, servers}) do
+
   		IO.puts "Starting Client..."
-  		Enum.map servers, fn x -> Node.ping(x) end
-  		{:ok, db_name}
-  	end
+  	
+      # Init Server Process Group
+      :pg2.create {:server, db_name}
+
+      # Connect this Node with Node Server/s
+      Enum.map servers, fn x -> Node.ping(x) end
+  		
+      {:ok, db_name}
+  	
+    end
 
   	def handle_call({:get, key}, _from, db_name) do
-  		{:reply, GenServer.call({:global, db_name}, {:get, key}), db_name}
+      case :pg2.get_members {:server, db_name} do 
+        [master|_] -> {:reply, GenServer.call(master, {:get, key}), db_name}
+        [] -> {:reply, :no_master, db_name}
+      end
   	end
 
     def handle_call({:set, key, value}, _from, db_name) do
-      GenServer.call {:global, db_name}, {:set, key, value}
-      {:reply, :ok, db_name}
+      case :pg2.get_members {:server, db_name} do
+        [master|_] -> 
+          GenServer.call master, {:set, key, value}
+          {:reply, :ok, db_name}
+        [] -> {:reply, :no_master, db_name}          
+      end
     end
 
     def handle_call({:remove, key}, _from, db_name) do
-      GenServer.call {:global, db_name}, {:remove, key}
-      {:reply, :ok, db_name}
+      case :pg2.get_members {:server, db_name} do
+        [master|_] -> 
+          GenServer.call master, {:remove, key}
+          {:reply, :ok, db_name}
+        [] -> {:reply, :no_master, db_name}  
+      end
+
     end    
 
     def handle_call(_, _from, db_name) do
@@ -48,7 +72,10 @@ defmodule DB.Client do
     end    
 
     def handle_cast({:set, key, value}, db_name) do
-      GenServer.cast {:global, db_name}, {:set, key, value}
+      case :pg2.get_members {:server, db_name} do
+        [master|_] -> GenServer.cast master, {:set, key, value}
+        [] -> 
+      end
       {:noreply, db_name}
     end
 

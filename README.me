@@ -1,0 +1,75 @@
+# Key-Value Store Distribuído
+
+El presente proyecto se encuentra programado en Elixir/Erlang y fue testeado en la version 1.2.4
+
+Consta de tres tipos de procesos, un cliente, un servidor que administra los pedidos y un lugar donde guardar los datos (funciona en memoria por lo que la caida de un nodo de datos repercute en la perdida de datos)
+
+Para su correcto funcionando, en caso de que los procesos corran en nodos ubicados en distintas maquinas es necesario setear el parametro cookie de la VM
+
+
+# Server
+
+Debe al menos un proceso de este tipo, en el mismo o distintos nodos. Las formas de crearlo son:
+
+DB.Server.Supervisor.start_link <nombre_database>
+o
+
+DB.Server.Supervisor.start_link <nombre_database>, [<otro_nodo>|...]
+donde los demas nodos pueden ser uno o mas nodos donde se desea operar la base de datos
+
+Es posible quitar y agregar cualquier cantidad de procesos server en cualquier momento, el unico requisito es que al menos necesita existir uno para que la base de datos funcione.
+
+Si bien pueden crearse cualquier cantidad de procesos servers, solo va a utilizarse uno, al que vamos a considerar master.
+
+
+# Data
+
+Debe existir al menos un proceso de este tipo, en el mismo o distintos nodos. Las formas de crearlo son:
+
+DB.Data.Supervisor.start_link <nombre_database>
+o
+
+DB.Data.Supervisor.start_link <nombre_database>, [<otro_nodo>|...]
+donde los demas nodos pueden ser uno o mas nodos donde se desea operar la base de datos
+
+Los datos enviados a los procesos server van a ser distribuidos mediante una funcion de hash entre todos los nodos data activos. Se testeo la funcion insertando 10000 datos en 5 nodos data y la distribucion fue la siguiente:
+
+2038
+1980
+1916
+2018
+2048
+
+
+Debe existir al menos un proceso data en la red de nodos de la base de datos para que funcione.
+
+
+# Client
+
+Pueden existir uno o mas procesos de este tipo, en el mismo o distintos nodos. La forma de crearlo es:
+
+DB.Client.Supervisor.start_link <nombre_client>, <nombre_database>, [<otro_nodo>|...]
+donde los demas nodos pueden ser uno o mas nodos donde se desea operar la base de datos
+
+El cliente expone una API publica para realizar las operaciones de get, set, remove y unsafe_set sobre el proceso server maestro.
+
+
+# Consideraciones Generales
+
+En caso de que cualquier proceso en el sistema falle el mismo es vuelto a levantar mediante un supervisor. En el caso del proceso server trae como consecuencia directa que dicho proceso pueda perder el status de master. En el caso del proceso data van a perderse los datos guardados en el mismo.
+
+# Implementacion
+En un primer lugar se opto por utilizar el modulo kernel de erlang para levantar los procesos server como una aplicaciones distribuida, pero dicha implementacion dificultaba que la cantidad de procesos server pueda variar en el tiempo (en runtime, no solo bajar procesos sino levantar nuevos)
+
+Se opto por utilizar el modulo pg2 que permite mantener una lista de procesos vivos distribuida entre cada uno de los nodos de una red de VMs. En caso de que un proceso se caia es removido de la lista.
+
+Los process groups no estan atados al ciclo de vida de ningun proceso, por lo que una vez inicializado va a seguir existiendo sin importar cuantos nodos nuevos se incorporen a la red o cuantos se caigan.
+
+En caso de particionamiento de red, si al menos uno de cada uno de los tres componentes siguen funcionando juntos, la base de datos va a continuar operando, pero pueden llegar a presentarse problemas en caso de haber admitido operaciones de set/remove en distintas particiones.
+
+
+# TODO:
+Chequeo del length key,value
+Chequeo cantidad de keys
+Replicacion
+Quitar/Agregar nodos data en runtime
