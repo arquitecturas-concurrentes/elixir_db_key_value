@@ -16,34 +16,42 @@ defmodule DB.Data do
       :pg2.join {:data, db_name}, self
 
       # Connect this Node with Database Node/s
-      Enum.map servers, fn x -> Node.ping(x) end
+      servers |> Enum.map(fn x -> Node.ping(x) end)
 
   		{:ok, %{}} 
   	
     end
 
     def handle_call {:get, key}, _from, data do
-      {:reply, Map.get(data, key), data}  
+      {:reply, data |> Map.get(key), data}  
     end
 
     def handle_call {:set, key, value}, _from, data do
-      {:reply, :ok, Map.put(data, key, value)}
+      {:reply, :ok, data |> Map.put(key, value)}
     end
 
     def handle_call {:remove, key}, _from, data do
-      {:reply, :ok, Map.delete(data, key)}
+      {:reply, :ok, data |> Map.delete(key)}
     end
 
     def handle_call {:keys}, _from, data do
-      {:reply, Map.keys(data), data}
+      {:reply, data |> Map.keys, data}
     end
+
+    def handle_call {:lower, value}, _from, data do
+      {:reply, data |> Map.values |> Enum.filter(fn x -> x < value end), data}
+    end
+
+    def handle_call {:higher, value}, _from, data do
+      {:reply, data |> Map.values |> Enum.filter(fn x -> x > value end), data}
+    end    
 
     def handle_call _, _from, data do
       {:reply, :unknown, data}
     end    
 
     def handle_cast {:set, key, value}, data do
-      {:noreply, Map.put(data, key, value)}
+      {:noreply, data |> Map.put(key, value)}
     end
 
     def handle_cast _, data do

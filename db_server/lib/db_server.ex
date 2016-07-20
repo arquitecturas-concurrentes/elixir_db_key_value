@@ -27,25 +27,37 @@ defmodule DB.Server do
 
 	def handle_call {:get, key}, _from, {db_name, datas} do
 		IO.puts "get #{inspect key}"
-		value = GenServer.call data_pid(db_name, key), {:get, key}
+		value = GenServer.call lookup_data(db_name, key), {:get, key}
 		{:reply, value, {db_name, datas}}
 	end
 
 	def handle_call {:set, key, value}, _from, {db_name, datas} do
 		IO.puts "set #{inspect key} #{inspect value}"
-		GenServer.call data_pid(db_name, key), {:set, key, value}
+		GenServer.call lookup_data(db_name, key), {:set, key, value}
 		{:reply, :ok, {db_name, datas}}
 	end
 
 	def handle_call {:remove, key}, _from, {db_name, datas} do
 		IO.puts "remove #{inspect key}"
-		GenServer.call data_pid(db_name, key), {:remove, key}
+		GenServer.call lookup_data(db_name, key), {:remove, key}
 		{:reply, :ok, {db_name, datas}}
+	end	
+
+	def handle_call {:lower, value}, _from, {db_name, datas} do
+		IO.puts "lower than #{inspect value}"
+		values = data_processes(db_name) |> Enum.map(fn x -> GenServer.call x, {:lower, value} end) |> List.flatten
+		{:reply, values, {db_name, datas}}
+	end
+
+	def handle_call {:higher, value}, _from, {db_name, datas} do
+		IO.puts "higher than #{inspect value}"
+		values = data_processes(db_name) |> Enum.map(fn x -> GenServer.call x, {:higher, value} end) |> List.flatten
+		{:reply, values, {db_name, datas}}
 	end	
 
 	def handle_cast {:set, key, value}, {db_name, datas} do
 		IO.puts "set #{inspect key} #{inspect value}"
-		GenServer.cast data_pid(db_name, key), {:set, key, value}
+		GenServer.cast lookup_data(db_name, key), {:set, key, value}
 		{:noreply, {db_name, datas}}
 	end
 
@@ -61,11 +73,15 @@ defmodule DB.Server do
 
 	end
 
-	defp data_pid db_name, key do
+	defp data_processes db_name do
+		:pg2.get_members {:data, db_name}	
+	end
+
+	defp lookup_data db_name, key do
 
 		value = :crypto.hash(:sha256, key) |> Base.encode16 |> String.graphemes |> Enum.map(fn x -> String.to_integer x, 16 end) |> Enum.sum
 
-		datas = :pg2.get_members {:data, db_name}
+		datas = data_processes db_name
 		
 		index = rem(value, length(datas))
 		
