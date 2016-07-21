@@ -29,7 +29,7 @@ Debe existir al menos un proceso de este tipo, en el mismo o distintos nodos. La
 DB.Data.Supervisor.start_link <nombre_database>
 o
 
-DB.Data.Supervisor.start_link <nombre_database>, [<otro_nodo>|...]
+DB.Data.Supervisor.start_link <nombre_database>, max_keys, key_length, value_length, [<otro_nodo>|...]
 donde los demas nodos pueden ser uno o mas nodos donde se desea operar la base de datos
 
 Los datos enviados a los procesos server van a ser distribuidos mediante una funcion de hash entre todos los nodos data activos. Se testeo la funcion insertando 10000 datos en 5 nodos data y la distribucion fue la siguiente:
