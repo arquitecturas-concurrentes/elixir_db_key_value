@@ -43,6 +43,13 @@ Los datos enviados a los procesos server van a ser distribuidos mediante una fun
 
 Debe existir al menos un proceso data en la red de nodos de la base de datos para que funcione.
 
+En caso de que la lista de procesos data cambie, la proxima interaccion del master con los data va a obligarlo a rebalancear las keys entre los procesos actuales. Si los datos son demasiados esto podria traer consigo dos problemas: que los procesos data no tengan espacio suficiente para aceptar los datos migrados, o que tarde tanto que el cliente termine en timeout.
+
+En caso de que un nodo de datos falle durante la migracion, va a provocar la caida el master (sera levantado nuevamente por su supervisor) y se comenzara a migrar los datos nuevamente en el siguiente master.
+
+Se puede chequear la cantidad de keys por nodo data de la siguiente forma
+DB.Data.check_key_distribution db_name
+
 
 # Client
 
@@ -52,6 +59,10 @@ DB.Client.Supervisor.start_link <nombre_client>, <nombre_database>, [<otro_nodo>
 donde los demas nodos pueden ser uno o mas nodos donde se desea operar la base de datos
 
 El cliente expone una API publica para realizar las operaciones de get, set, remove y unsafe_set sobre el proceso server maestro.
+
+Se agrego el siguiente metodo para inicializar de manera rapida una base de datos con N datos
+DB.Client.init_dummy_data pid, prefix, count
+
 
 
 # Consideraciones Generales
@@ -69,7 +80,4 @@ En caso de particionamiento de red, si al menos uno de cada uno de los tres comp
 
 
 # TODO:
-Chequeo del length key,value
-Chequeo cantidad de keys
 Replicacion
-Quitar/Agregar nodos data en runtime

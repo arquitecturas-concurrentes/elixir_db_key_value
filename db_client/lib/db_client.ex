@@ -38,7 +38,7 @@ defmodule DB.Client do
 
     # Init dummy data
     def init_dummy_data pid, prefix, count do
-      for n <- 0..count, do: set pid, "#{prefix}#{n}", "#{n}"
+      for n <- 1..count, do: set pid, "#{prefix}#{n}", "#{n}"
     end
 
   	# Private API
