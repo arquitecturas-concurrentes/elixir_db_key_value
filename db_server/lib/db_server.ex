@@ -25,45 +25,70 @@ defmodule DB.Server do
 
 	end
 
-	def handle_call {:get, key}, _from, {db_name, datas} do
+	def handle_call {:get, key}, _from, {db_name, old_data_processes} do
 		IO.puts "get #{inspect key}"
+		on_data_change db_name, old_data_processes
 		value = GenServer.call lookup_data(db_name, key), {:get, key}
-		{:reply, value, {db_name, datas}}
+		{:reply, value, {db_name, data_processes(db_name)}}
 	end
 
-	def handle_call {:set, key, value}, _from, {db_name, datas} do
+	def handle_call {:set, key, value}, _from, {db_name, old_data_processes} do
 		IO.puts "set #{inspect key} #{inspect value}"
+		on_data_change db_name, old_data_processes
 		GenServer.call lookup_data(db_name, key), {:set, key, value}
-		{:reply, :ok, {db_name, datas}}
+		{:reply, :ok, {db_name, data_processes(db_name)}}
 	end
 
-	def handle_call {:remove, key}, _from, {db_name, datas} do
+	def handle_call {:remove, key}, _from, {db_name, old_data_processes} do
 		IO.puts "remove #{inspect key}"
+		on_data_change db_name, old_data_processes
 		GenServer.call lookup_data(db_name, key), {:remove, key}
-		{:reply, :ok, {db_name, datas}}
+		{:reply, :ok, {db_name, data_processes(db_name)}}
 	end	
 
-	def handle_call {:lower, value}, _from, {db_name, datas} do
+	def handle_call {:lower, value}, _from, {db_name, old_data_processes} do
 		IO.puts "lower than #{inspect value}"
+		on_data_change db_name, old_data_processes
 		values = data_processes(db_name) |> Enum.map(fn x -> GenServer.call x, {:lower, value} end) |> List.flatten
-		{:reply, values, {db_name, datas}}
+		{:reply, values, {db_name, data_processes(db_name)}}
 	end
 
-	def handle_call {:higher, value}, _from, {db_name, datas} do
+	def handle_call {:higher, value}, _from, {db_name, old_data_processes} do
 		IO.puts "higher than #{inspect value}"
+		on_data_change db_name, old_data_processes
 		values = data_processes(db_name) |> Enum.map(fn x -> GenServer.call x, {:higher, value} end) |> List.flatten
-		{:reply, values, {db_name, datas}}
+		{:reply, values, {db_name, data_processes(db_name)}}
 	end	
 
-	def handle_cast {:set, key, value}, {db_name, datas} do
+	def handle_cast {:set, key, value}, {db_name, old_data_processes} do
 		IO.puts "set #{inspect key} #{inspect value}"
+		on_data_change db_name, old_data_processes
 		GenServer.cast lookup_data(db_name, key), {:set, key, value}
-		{:noreply, {db_name, datas}}
+		{:noreply, {db_name, data_processes(db_name)}}
 	end
 
- 	# TODO: para chequear si aparecieron nodos data nuevos
-	defp onDataChange(db_name, datas) do
+ 	# it checks if data processes have changed
+	defp on_data_change db_name, old_data_processes do
 		
+		if data_processes(db_name) != old_data_processes do
+
+			data_processes(db_name) |> Enum.each(fn pid ->
+				GenServer.call(pid, {:keys}) |> Enum.each(fn key ->
+
+					if lookup_data(db_name, key) != pid do
+						value = GenServer.call pid, {:get, key}
+						GenServer.call pid, {:remove, key}
+						GenServer.call lookup_data(db_name, key), {:set, key, value}
+						IO.puts "key #{key} migrated from #{inspect pid} to #{inspect lookup_data(db_name, key)}"
+					end
+
+				end)	
+			end)
+
+		else
+			# no changes
+		end
+
 		#d = :pg2.get_members db_name
 		#if datas != :pg2.get_members db_name do
 		#	IO.puts 'CAMBIARON LOS DATA #{inspect d}'
@@ -73,10 +98,12 @@ defmodule DB.Server do
 
 	end
 
+	# list of current data pids
 	defp data_processes db_name do
 		:pg2.get_members {:data, db_name}	
 	end
 
+	# lookup data pid by key
 	defp lookup_data db_name, key do
 
 		value = :crypto.hash(:sha256, key) |> Base.encode16 |> String.graphemes |> Enum.map(fn x -> String.to_integer x, 16 end) |> Enum.sum

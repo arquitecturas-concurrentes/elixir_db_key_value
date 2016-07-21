@@ -36,6 +36,11 @@ defmodule DB.Client do
       GenServer.call pid, {:higher, value}
     end      
 
+    # Init dummy data
+    def init_dummy_data pid, prefix, count do
+      for n <- 0..count, do: set pid, "#{prefix}#{n}", "#{n}"
+    end
+
   	# Private API
   	def init({:ok, db_name, servers}) do
 

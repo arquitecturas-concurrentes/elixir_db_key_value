@@ -6,6 +6,11 @@ defmodule DB.Data do
       GenServer.start_link(__MODULE__, {:ok, db_name, servers})
   	end	
 
+    # Check key distribution
+    def check_key_distribution db_name do
+      :pg2.get_members({:data, db_name}) |> Enum.map(fn pid -> GenServer.call(pid,{:keys}) |> Enum.map(fn key -> GenServer.call(pid, {:get, key}) end) |> length end)
+    end
+
   	# Private API
   	def init {:ok, db_name, servers} do
 
